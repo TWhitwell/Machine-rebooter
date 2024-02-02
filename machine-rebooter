@@ -1,0 +1,78 @@
+import paramiko
+from questionary import prompt
+import os
+import subprocess
+
+def ask_information_gather(**kwargs):
+    machine_mapping = {
+        "Screen 1": "ScreenUp1",
+        "Screen 2": "ScreenUp2",
+        "Screen 3": "ScreenUp3",
+        "Screen 4": "ScreenUp4",
+        "Screen 5": "ScreenUp5",
+        "Screen 6": "ScreenUp6",
+        "Screen 7": "ScreenUp7",
+        "Screen 8": "ScreenUp8",
+        "Screen 1a": "ScreenDown1",
+        "Screen 2a": "ScreenDown2",
+        "Screen 3a": "ScreenDown3",
+        "Screen 4a": "ScreenDown4",
+    }
+
+    choices = [
+        {
+            "type": "checkbox",
+            "name": "machines",
+            "message": "What Screens do you want to reboot? ",
+            "choices": [
+                f"{user_friendly_name} ({actual_name})"
+                for user_friendly_name, actual_name in machine_mapping.items()
+            ],
+        },
+    ]
+
+    return prompt(choices, **kwargs)
+
+
+def reboot_machine(machine):
+    # Create an SSH client
+    ssh_client = paramiko.SSHClient()
+
+    try:
+        for selected_machine in machine['machines']:
+            
+            # Extract the actual machine name from the user-friendly display
+            actual_name = selected_machine.split('(')[-1].rstrip(')')
+
+            # Ping the machine first
+            try:
+                subprocess.check_output("ping " + actual_name, shell=True, stderr=subprocess.STDOUT)
+                # If the ping command succeeded, the machine is reachable
+
+                # Connect to the remote machine
+                ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                ssh_client.connect(actual_name, username='', password="")
+
+                # Execute the reboot command
+                _, stdout, _ = ssh_client.exec_command('sudo reboot')
+
+                # Wait for the command to finish
+                stdout.channel.recv_exit_status()
+
+                print(f"Reboot command sent to {selected_machine}")
+            except subprocess.CalledProcessError:
+                # If the ping command failed, the machine is not reachable
+                print(f"Pi {actual_name} not reachable")
+
+    except paramiko.AuthenticationException:
+        print(f"Authentication failed. Please check the username and password.")
+    except paramiko.SSHException as e:
+        print(f"Error connecting: {str(e)}")
+    finally:
+        # Close the SSH connection
+        ssh_client.close()
+
+if __name__ == "__main__":
+    machines_to_reboot = ask_information_gather()
+
+    reboot_machine(machines_to_reboot)
